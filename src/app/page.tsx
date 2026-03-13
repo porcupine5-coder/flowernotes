@@ -655,42 +655,45 @@ export default function FlowerNotesApp() {
               <FloatingFlowers enabled={showFloating} density={floatingDensity} />
 
               <div className="flex flex-col items-center justify-center min-h-[70vh] text-center relative z-10">
-                {/* Hero icon with parallax */}
+                {/* Hero icon with parallax - Professional animated illustration */}
                 <motion.div style={{ x: heroX, y: heroY }} className="mb-10 relative">
                   <motion.div
                     initial={{ scale: 0, rotate: -20 }}
-                    animate={{ scale: 1, rotate: 3 }}
+                    animate={{ scale: 1, rotate: 0 }}
                     transition={{ type: "spring", bounce: 0.5 }}
-                    className="relative"
+                    className="relative w-40 h-40 flex items-center justify-center"
                   >
-                    <div className="w-28 h-28 bg-white rounded-[28px] shadow-2xl flex items-center justify-center border border-slate-50">
-                      <Heart className="text-[#e11d48] w-14 h-14 drop-shadow-md" fill="#e11d48" />
+                    {/* Animated pulsing rings */}
+                    <motion.div
+                      className="absolute inset-0 rounded-full border-2 border-[#14b8a6]/40"
+                      animate={{ scale: [1, 1.3, 1] }}
+                      transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+                    />
+                    <motion.div
+                      className="absolute inset-0 rounded-full border-2 border-[#0f766e]/25"
+                      animate={{ scale: [1.2, 1.5, 1.2] }}
+                      transition={{ repeat: Infinity, duration: 3.5, ease: "easeInOut", delay: 0.2 }}
+                    />
+                    <motion.div
+                      className="absolute inset-0 rounded-full border-2 border-[#e11d48]/20"
+                      animate={{ scale: [0.8, 1.1, 0.8] }}
+                      transition={{ repeat: Infinity, duration: 2.8, ease: "easeInOut", delay: 0.4 }}
+                    />
+                    
+                    {/* Main card with icon */}
+                    <div className="w-32 h-32 bg-white rounded-3xl shadow-2xl flex items-center justify-center border border-slate-50 relative z-10">
+                      {/* Professional heart icon */}
+                      <Heart className="text-[#e11d48] w-16 h-16" fill="#e11d48" />
                     </div>
-                    {/* Orbiting elements */}
-                    <motion.span
-                      className="absolute -top-3 -left-3 text-2xl"
-                      animate={{ rotate: 360 }}
-                      transition={{ repeat: Infinity, duration: 8, ease: "linear" }}
-                      style={{ originX: "2.2rem", originY: "2.2rem" }}
-                    >
-                      🌹
-                    </motion.span>
-                    <motion.span
-                      className="absolute -bottom-2 -right-4 text-xl"
-                      animate={{ rotate: -360 }}
-                      transition={{ repeat: Infinity, duration: 10, ease: "linear" }}
-                      style={{ originX: "-0.8rem", originY: "-0.8rem" }}
-                    >
-                      ✨
-                    </motion.span>
                   </motion.div>
 
+                  {/* Free badge - professional style */}
                   <motion.div
                     animate={{ y: [0, -8, 0] }}
                     transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
-                    className="absolute -top-5 -right-5 bg-gradient-to-r from-[#14b8a6] to-[#0f766e] text-white text-xs px-3 py-1.5 rounded-full shadow-lg font-bold flex items-center gap-1"
+                    className="absolute -top-6 -right-6 bg-gradient-to-r from-[#14b8a6] to-[#0d9488] text-white text-xs px-3.5 py-1.5 rounded-full shadow-lg font-bold flex items-center gap-1.5"
                   >
-                    <Sparkles size={11} /> Free
+                    <span className="w-1.5 h-1.5 bg-white rounded-full" /> Complimentary
                   </motion.div>
                 </motion.div>
 
@@ -710,13 +713,13 @@ export default function FlowerNotesApp() {
                 </motion.h1>
 
                 <motion.p
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.35 }}
-                  className="text-lg md:text-xl text-slate-500 max-w-xl mx-auto mb-12 leading-relaxed"
-                >
-                  Craft digital love notes adorned with beautiful flowers, cute stickers, and your own drawings. Share instantly via a unique <strong className="text-[#0f766e]">QR code</strong>.
-                </motion.p>
+                   initial={{ opacity: 0, y: 20 }}
+                   animate={{ opacity: 1, y: 0 }}
+                   transition={{ delay: 0.35 }}
+                   className="text-lg md:text-xl text-slate-500 max-w-xl mx-auto mb-12 leading-relaxed"
+                 >
+                   Create personalized love notes adorned with beautiful flowers, decorative elements, and your own drawings. Share instantly via a unique <strong className="text-[#0f766e]">QR code</strong>.
+                 </motion.p>
 
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
@@ -754,15 +757,25 @@ export default function FlowerNotesApp() {
                   transition={{ delay: 0.7 }}
                   className="flex flex-wrap items-center justify-center gap-3 mt-16"
                 >
-                  {["🌹 Virtual Flowers", "✍️ Free Drawing", "🔗 QR Sharing", "🔒 Private or Public", "⚡ Instant"].map(
-                    (feat) => (
-                      <span
-                        key={feat}
-                        className="bg-white/80 backdrop-blur-sm border border-slate-100 text-slate-600 text-xs font-semibold px-4 py-2 rounded-full shadow-sm"
-                      >
-                        {feat}
-                      </span>
-                    )
+                  {[
+                    { label: "Virtual Flowers", icon: Flower2 },
+                    { label: "Free Drawing", icon: PenTool },
+                    { label: "QR Sharing", icon: Share2 },
+                    { label: "Privacy Controls", icon: Lock },
+                    { label: "Instant Generation", icon: Sparkles }
+                  ].map(
+                    (feat, idx) => {
+                      const IconComponent = feat.icon;
+                      return (
+                        <span
+                          key={idx}
+                          className="bg-white/70 backdrop-blur-sm border border-slate-100 text-slate-600 text-xs font-semibold px-4 py-2.5 rounded-full shadow-sm hover:shadow-md hover:border-slate-200 transition-all flex items-center gap-2"
+                        >
+                          <IconComponent size={14} className="text-[#14b8a6]" />
+                          {feat.label}
+                        </span>
+                      );
+                    }
                   )}
                 </motion.div>
               </div>
@@ -1217,7 +1230,7 @@ export default function FlowerNotesApp() {
 
       {/* ----------------------- FOOTER ----------------------- */}
       <footer className="text-center py-8 text-xs text-slate-400 border-t border-slate-200/60 mt-16">
-        <p>Made with 💖 &amp; 🌹 · FlowerNotes</p>
+        <p>Crafted with care · FlowerNotes</p>
       </footer>
 
       {/* ------------------------ TOAST ------------------------ */}
