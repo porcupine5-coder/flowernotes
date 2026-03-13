@@ -445,12 +445,11 @@ export default function FlowerNotesApp() {
         setProgress(100);
         clearInterval(interval);
         const id = Math.random().toString(36).substring(2, 9);
-        setSavedQRUrl(`https://flowernotes.vercel.app/note/${id}`);
-
-        // Save note
+        // Create note object
         const drawUrl = sigCanvas.current && hasDrawing
           ? sigCanvas.current.getTrimmedCanvas().toDataURL("image/png")
           : undefined;
+          
         const newNote: SavedNote = {
           id,
           recipient,
@@ -462,7 +461,29 @@ export default function FlowerNotesApp() {
           animatedEmojis: animatedEmojis.length > 0 ? animatedEmojis : undefined,
           createdAt: new Date(),
         };
+        
+        // Save to local state
         setSavedNotes((prev) => [newNote, ...prev]);
+
+        // Save to localStorage for local persistence
+        try {
+          const existing = JSON.parse(localStorage.getItem("flower-notes-saved") || "[]");
+          localStorage.setItem("flower-notes-saved", JSON.stringify([newNote, ...existing]));
+        } catch (e) { console.error(e) }
+
+        // Encode for URL sharing (excluding huge base64 drawings to keep QR readable)
+        const sharePayload = {
+          r: recipient,
+          m: message,
+          f: selectedFlowers,
+          s: stamp,
+          e: animatedEmojis.length > 0 ? animatedEmojis : undefined,
+        };
+        const encodedData = btoa(encodeURIComponent(JSON.stringify(sharePayload)));
+        
+        // Dynamic origin
+        const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://flowernotes.vercel.app";
+        setSavedQRUrl(`${baseUrl}/note/${id}?d=${encodedData}`);
 
         setTimeout(() => setStep("result"), 700);
       } else {
