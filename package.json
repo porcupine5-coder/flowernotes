@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@remotion/animated-emoji": "^4.0.434",
     "@types/animejs": "^3.1.13",
     "@types/react-signature-canvas": "^1.0.7",
     "animejs": "^4.3.6",
@@ -21,7 +22,8 @@
     "react-dom": "19.2.3",
     "react-qr-code": "^2.0.18",
     "react-signature-canvas": "^1.1.0-alpha.2",
-    "tailwind-merge": "^3.5.0"
+    "tailwind-merge": "^3.5.0",
+    "vector-bloom": "^1.1.0"
   },
   "devDependencies": {
     "@svgr/webpack": "^8.1.0",

@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
-import { motion, AnimatePresence, useMotionValue, useTransform } from "framer-motion";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { motion, AnimatePresence, useMotionValue, useTransform, useReducedMotion } from "framer-motion";
 import {
   Heart,
   Sparkles,
@@ -27,10 +27,20 @@ import QRCode from "react-qr-code";
 import SignatureCanvas from "react-signature-canvas";
 import { AdvancedColorPicker } from "@/components/AdvancedColorPicker";
 import { Bouquet } from "@/components/Bouquet";
+import { AnimatedEmojiPicker } from "@/components/AnimatedEmojiPicker";
+import { AnimatedEmojiCanvas } from "@/components/AnimatedEmojiCanvas";
+import { LetterNote } from "@/components/LetterNote";
 
 /* -------------------------------------------------------
    TYPES & MOCK DATA
 ------------------------------------------------------- */
+interface AnimatedEmoji {
+  id: string;
+  x: number;
+  y: number;
+  size: number;
+}
+
 interface SavedNote {
   id: string;
   recipient: string;
@@ -39,6 +49,7 @@ interface SavedNote {
   stamp: string;
   isPublic: boolean;
   drawingUrl?: string;
+  animatedEmojis?: AnimatedEmoji[];
   createdAt: Date;
 }
 
@@ -50,6 +61,8 @@ const FLOWER_OPTIONS = [
   { value: "hibiscus", emoji: "🌺", label: "Hibiscus" },
   { value: "daisy", emoji: "🌼", label: "Daisy" },
   { value: "lily", emoji: "💮", label: "Lily" },
+  { value: "lotus", emoji: "🪷", label: "Lotus" },
+  { value: "water-lily", emoji: "🪷", label: "Water Lily" },
   { value: "lavender", emoji: "💜", label: "Lavender" },
   { value: "clover", emoji: "🍀", label: "Clover" },
   { value: "herb", emoji: "🌿", label: "Eucalyptus" },
@@ -65,6 +78,95 @@ const STAMP_OPTIONS = [
   { value: "butterfly", emoji: "🦋", label: "Butterfly" },
   { value: "rainbow", emoji: "🌈", label: "Rainbow" },
 ];
+
+// Memoized flower button to prevent unnecessary re-renders
+const FlowerButton = React.memo(({
+  flower,
+  isSelected,
+  onClick,
+}: {
+  flower: typeof FLOWER_OPTIONS[0];
+  isSelected: boolean;
+  onClick: () => void;
+}) => {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative p-2.5 rounded-xl text-center transition-all border-2 group ${
+        isSelected
+          ? "border-[#14b8a6] bg-[#14b8a6]/5 shadow-md"
+          : "border-slate-100 bg-slate-50/50 hover:border-slate-200"
+      }`}
+      title={flower.label}
+    >
+      <span className="text-2xl block">{flower.emoji}</span>
+      <span className="text-[10px] font-semibold text-slate-500 mt-0.5 block truncate">{flower.label}</span>
+      {isSelected && (
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#14b8a6] text-white rounded-full flex items-center justify-center text-[10px] font-bold shadow"
+        >
+          ✓
+        </motion.div>
+      )}
+    </button>
+  );
+}, (prev, next) => {
+  return prev.isSelected === next.isSelected && prev.flower === next.flower;
+});
+
+FlowerButton.displayName = "FlowerButton";
+
+// Memoized stamp button to prevent unnecessary re-renders
+const StampButton = React.memo(({
+  stamp,
+  isSelected,
+  onClick,
+}: {
+  stamp: typeof STAMP_OPTIONS[0];
+  isSelected: boolean;
+  onClick: () => void;
+}) => {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`p-2.5 rounded-xl text-center transition-all border-2 ${
+        isSelected
+          ? "border-[#e11d48] bg-[#e11d48]/5 shadow-md"
+          : "border-slate-100 bg-slate-50/50 hover:border-slate-200"
+      }`}
+      title={stamp.label}
+    >
+      <span className="text-2xl block">{stamp.emoji}</span>
+      <span className="text-[10px] font-semibold text-slate-500 mt-0.5 block truncate">{stamp.label}</span>
+    </button>
+  );
+}, (prev, next) => {
+  return prev.isSelected === next.isSelected && prev.stamp === next.stamp;
+});
+
+StampButton.displayName = "StampButton";
+const useMediaQuery = (query: string) => {
+  const [matches, setMatches] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia(query);
+    const update = () => setMatches(media.matches);
+    update();
+    if ("addEventListener" in media) {
+      media.addEventListener("change", update);
+      return () => media.removeEventListener("change", update);
+    }
+    (media as any).addListener(update);
+    return () => (media as any).removeListener(update);
+  }, [query]);
+
+  return matches;
+};
 
 /* PEN_COLORS kept as fallback initial */
 const INITIAL_PEN_COLOR = "#e11d48";
@@ -114,44 +216,56 @@ const INITIAL_PUBLIC_NOTES: SavedNote[] = [
 /* -------------------------------------------------------
    ANIMATED FLOATING ELEMENTS
 ------------------------------------------------------- */
-const FloatingFlowers = () => {
+const FloatingFlowers = ({ enabled = true, density = 10 }: { enabled?: boolean; density?: number }) => {
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
 
-  const items = ["🌹", "🌻", "🌷", "🌸", "🌺", "💐", "💖", "✨", "🦋", "🌈"];
+  const baseItems = ["🌹", "🌻", "🌷", "🌸", "🌺", "💐", "💖", "✨", "🦋", "🌈"];
+  const items = useMemo(() => {
+    const sliced = baseItems.slice(0, Math.min(density, baseItems.length));
+    return sliced.map((item, i) => ({
+      item,
+      left: 5 + i * 9 + Math.random() * 4,
+      top: 58 + Math.random() * 28,
+      yTravel: 520 + Math.random() * 380,
+      xDrift: (i % 2 === 0 ? 1 : -1) * (20 + Math.random() * 40),
+      duration: 8 + Math.random() * 6,
+      delay: i * 1.1,
+    }));
+  }, [density]);
 
+  if (!enabled) return null;
   if (!mounted) return <div className="absolute inset-0 pointer-events-none" />;
 
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
-      {items.map((item, i) => (
+      {items.map((cfg, i) => (
         <motion.div
-          key={i}
+          key={`${cfg.item}-${i}`}
           className="absolute text-2xl sm:text-3xl select-none"
           style={{
-            left: `${(i * 10) + Math.random() * 5}%`,
-            top: `${60 + Math.random() * 30}%`,
+            left: `${cfg.left}%`,
+            top: `${cfg.top}%`,
           }}
           animate={{
-            y: [0, -600 - Math.random() * 300],
-            x: [0, (i % 2 === 0 ? 40 : -40) * Math.random()],
+            y: [0, -cfg.yTravel],
+            x: [0, cfg.xDrift],
             rotate: [0, 360],
             opacity: [0, 0.8, 0.6, 0],
           }}
           transition={{
-            duration: 8 + Math.random() * 6,
+            duration: cfg.duration,
             repeat: Infinity,
-            delay: i * 1.2,
+            delay: cfg.delay,
             ease: "easeOut",
           }}
         >
-          {item}
+          {cfg.item}
         </motion.div>
       ))}
     </div>
   );
 };
-
 /* -------------------------------------------------------
    TOAST NOTIFICATION
 ------------------------------------------------------- */
@@ -198,7 +312,7 @@ const CanvasWrapper = ({
         minWidth={brushSize}
         maxWidth={brushSize}
         canvasProps={{
-          className: "w-full h-48 sm:h-64 cursor-crosshair",
+          className: "w-full h-48 sm:h-64 cursor-crosshair touch-none",
         }}
         onEnd={onEnd}
       />
@@ -212,16 +326,18 @@ const CanvasWrapper = ({
 /* -------------------------------------------------------
    NOTE CARD COMPONENT
 ------------------------------------------------------- */
-const NoteCard = ({ note, index }: { note: SavedNote; index: number }) => {
+const NoteCard = ({ note, index, enableHover = true }: { note: SavedNote; index: number; enableHover?: boolean }) => {
+  const reduceMotion = useReducedMotion();
+  const allowHover = enableHover && !reduceMotion;
   const stampEmoji = STAMP_OPTIONS.find((s) => s.value === note.stamp)?.emoji || "💖";
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.1, type: "spring", damping: 20 }}
-      whileHover={{ y: -6, scale: 1.02 }}
-      className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all border border-slate-100 overflow-hidden group cursor-default"
+      transition={reduceMotion ? { duration: 0 } : { delay: index * 0.1, type: "spring", damping: 20 }}
+      whileHover={allowHover ? { y: -6, scale: 1.02 } : undefined}
+      className={`bg-white rounded-2xl shadow-md ${allowHover ? "hover:shadow-xl" : ""} transition-all border border-slate-100 overflow-hidden group cursor-default`}
     >
       <div className="h-2 bg-gradient-to-r from-[#0f766e] via-[#14b8a6] to-[#e11d48]" />
       <div className="p-5">
@@ -230,6 +346,7 @@ const NoteCard = ({ note, index }: { note: SavedNote; index: number }) => {
             <Bouquet 
               flowers={(note.flowers || []).slice(0, 5)} 
               containerSize="sm"
+              enableHover={enableHover}
             />
           </div>
           <span className="text-2xl opacity-60 group-hover:opacity-100 transition-opacity flex-shrink-0">
@@ -274,6 +391,7 @@ export default function FlowerNotesApp() {
   const [penColor, setPenColor] = useState(INITIAL_PEN_COLOR);
   const [brushSize, setBrushSize] = useState(2);
   const [activeTool, setActiveTool] = useState<"pen" | "eraser">("pen");
+  const [animatedEmojis, setAnimatedEmojis] = useState<AnimatedEmoji[]>([]);
   const sigCanvas = useRef<SignatureCanvas | null>(null);
 
   // Processing
@@ -289,6 +407,14 @@ export default function FlowerNotesApp() {
   // Gallery
   const [showGallery, setShowGallery] = useState(false);
 
+  const reduceMotion = useReducedMotion();
+  const isSmallScreen = useMediaQuery("(max-width: 768px)");
+  const canHover = useMediaQuery("(hover: hover) and (pointer: fine)");
+  const enableHover = canHover && !reduceMotion;
+  const showFloating = !reduceMotion && !isSmallScreen;
+  const floatingDensity = isSmallScreen ? 5 : 10;
+  const processingDecorCount = reduceMotion ? 0 : (isSmallScreen ? 4 : 8);
+
   // Mouse parallax for hero
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
@@ -297,13 +423,18 @@ export default function FlowerNotesApp() {
 
   useEffect(() => {
     setMounted(true);
+    if (!canHover || reduceMotion) {
+      mouseX.set(0.5);
+      mouseY.set(0.5);
+      return;
+    }
     const handleMouseMove = (e: MouseEvent) => {
       mouseX.set(e.clientX / window.innerWidth);
       mouseY.set(e.clientY / window.innerHeight);
     };
-    window.addEventListener("mousemove", handleMouseMove);
-    return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, [mouseX, mouseY]);
+    window.addEventListener("mousemove", handleMouseMove as EventListener);
+    return () => window.removeEventListener("mousemove", handleMouseMove as EventListener);
+  }, [mouseX, mouseY, canHover, reduceMotion]);
 
   useEffect(() => {
     if (step !== "processing") return;
@@ -328,6 +459,7 @@ export default function FlowerNotesApp() {
           stamp,
           isPublic,
           drawingUrl: drawUrl,
+          animatedEmojis: animatedEmojis.length > 0 ? animatedEmojis : undefined,
           createdAt: new Date(),
         };
         setSavedNotes((prev) => [newNote, ...prev]);
@@ -364,23 +496,43 @@ export default function FlowerNotesApp() {
     }
   }, [savedQRUrl, showToast]);
 
-  const handleClearDrawing = () => {
+  const handleClearDrawing = useCallback(() => {
     sigCanvas.current?.clear();
     setHasDrawing(false);
-  };
+  }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (!recipient.trim() || !message.trim()) return;
     setStep("processing");
     setProgress(0);
+  }, [recipient, message]);
+
+  const addFlower = useCallback((value: string) => {
+    setSelectedFlowers((prev) => [...prev, value]);
+  }, []);
+
+  const removeFlower = useCallback((index: number) => {
+    setSelectedFlowers((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleAddAnimatedEmoji = (emojiId: string) => {
+    const newEmoji: AnimatedEmoji = {
+      id: `${emojiId}-${Date.now()}`,
+      x: Math.random() * 200,
+      y: Math.random() * 150,
+      size: 48,
+    };
+    setAnimatedEmojis((prev) => [...prev, newEmoji]);
   };
 
-  const toggleFlower = (value: string) => {
-    setSelectedFlowers((prev) =>
-      prev.includes(value)
-        ? prev.filter((v) => v !== value)
-        : [...prev, value]
+  const handleRemoveAnimatedEmoji = (instanceId: string) => {
+    setAnimatedEmojis((prev) => prev.filter((e) => e.id !== instanceId));
+  };
+
+  const handleUpdateEmojiPosition = (instanceId: string, x: number, y: number) => {
+    setAnimatedEmojis((prev) =>
+      prev.map((e) => (e.id === instanceId ? { ...e, x, y } : e))
     );
   };
 
@@ -393,6 +545,7 @@ export default function FlowerNotesApp() {
     setHasDrawing(false);
     setIsPublic(true);
     setProgress(0);
+    setAnimatedEmojis([]);
   };
 
   const bouquetEmojis = selectedFlowers.map(
@@ -413,7 +566,7 @@ export default function FlowerNotesApp() {
 
       {/* ------------------------ HEADER ------------------------ */}
       <header className="sticky top-0 z-40 bg-white/60 backdrop-blur-xl border-b border-white/80 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
           <button onClick={resetForm} className="flex items-center gap-2 group">
             <div className="w-9 h-9 bg-gradient-to-br from-[#0f766e] to-[#14b8a6] rounded-xl flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow">
               <Flower2 className="text-white" size={18} />
@@ -423,10 +576,10 @@ export default function FlowerNotesApp() {
             </span>
           </button>
 
-          <nav className="flex items-center gap-2">
+          <nav className="flex items-center gap-2 w-full sm:w-auto">
             <button
               onClick={() => { setShowGallery(!showGallery); if (step !== "landing") setStep("landing"); }}
-              className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
+              className={`flex-1 sm:flex-none px-4 py-2 rounded-full text-sm font-semibold transition-all ${
                 showGallery
                   ? "bg-[#0f766e] text-white shadow-md"
                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -438,7 +591,7 @@ export default function FlowerNotesApp() {
             </button>
             <button
               onClick={() => { setShowGallery(false); setStep("compose"); }}
-              className="px-4 py-2 rounded-full text-sm font-semibold bg-[#14b8a6] text-white hover:bg-[#0d9488] transition-all shadow-md flex items-center gap-1.5"
+              className="flex-1 sm:flex-none px-4 py-2 rounded-full text-sm font-semibold bg-[#14b8a6] text-white hover:bg-[#0d9488] transition-all shadow-md flex items-center gap-1.5 justify-center"
             >
               <Send size={14} /> New Note
             </button>
@@ -475,7 +628,7 @@ export default function FlowerNotesApp() {
                 {savedNotes
                   .filter((n) => n.isPublic)
                   .map((note, i) => (
-                    <NoteCard key={note.id} note={note} index={i} />
+                    <NoteCard key={note.id} note={note} index={i} enableHover={enableHover} />
                   ))}
               </div>
 
@@ -499,7 +652,7 @@ export default function FlowerNotesApp() {
               className="relative"
             >
               {/* Floating flowers */}
-              <FloatingFlowers />
+              <FloatingFlowers enabled={showFloating} density={floatingDensity} />
 
               <div className="flex flex-col items-center justify-center min-h-[70vh] text-center relative z-10">
                 {/* Hero icon with parallax */}
@@ -692,42 +845,22 @@ export default function FlowerNotesApp() {
                              flowers={selectedFlowers} 
                              containerSize="md"
                              interactive={true}
-                             onFlowerClick={toggleFlower}
+                             onFlowerClick={(_, idx) => removeFlower(idx)}
+                             enableHover={enableHover}
                            />
                          </div>
                        </div>
                      )}
 
                     <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                      {FLOWER_OPTIONS.map((f) => {
-                        const isSelected = selectedFlowers.includes(f.value);
-                        const count = selectedFlowers.filter((v) => v === f.value).length;
-                        return (
-                          <button
-                            key={f.value}
-                            type="button"
-                            onClick={() => toggleFlower(f.value)}
-                            className={`relative p-2.5 rounded-xl text-center transition-all border-2 group ${
-                              isSelected
-                                ? "border-[#14b8a6] bg-[#14b8a6]/5 shadow-md"
-                                : "border-slate-100 bg-slate-50/50 hover:border-slate-200"
-                            }`}
-                            title={f.label}
-                          >
-                            <span className="text-2xl block">{f.emoji}</span>
-                            <span className="text-[10px] font-semibold text-slate-500 mt-0.5 block truncate">{f.label}</span>
-                            {isSelected && (
-                              <motion.div
-                                initial={{ scale: 0 }}
-                                animate={{ scale: 1 }}
-                                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#14b8a6] text-white rounded-full flex items-center justify-center text-[10px] font-bold shadow"
-                              >
-                                ✓
-                              </motion.div>
-                            )}
-                          </button>
-                        );
-                      })}
+                      {FLOWER_OPTIONS.map((f) => (
+                        <FlowerButton
+                          key={f.value}
+                          flower={f}
+                          isSelected={selectedFlowers.includes(f.value)}
+                          onClick={() => addFlower(f.value)}
+                        />
+                      ))}
                     </div>
                   </div>
 
@@ -738,22 +871,37 @@ export default function FlowerNotesApp() {
                     </label>
                     <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                       {STAMP_OPTIONS.map((s) => (
-                        <button
+                        <StampButton
                           key={s.value}
-                          type="button"
+                          stamp={s}
+                          isSelected={stamp === s.value}
                           onClick={() => setStamp(s.value)}
-                          className={`p-2.5 rounded-xl text-center transition-all border-2 ${
-                            stamp === s.value
-                              ? "border-[#e11d48] bg-[#e11d48]/5 shadow-md"
-                              : "border-slate-100 bg-slate-50/50 hover:border-slate-200"
-                          }`}
-                          title={s.label}
-                        >
-                          <span className="text-2xl block">{s.emoji}</span>
-                          <span className="text-[10px] font-semibold text-slate-500 mt-0.5 block truncate">{s.label}</span>
-                        </button>
+                        />
                       ))}
                     </div>
+                  </div>
+
+                  {/* ── Animated Emojis ── */}
+                  <div className="space-y-3">
+                    <AnimatedEmojiPicker
+                      selectedEmojis={animatedEmojis.map((e) => ({ ...e, instanceId: e.id }))}
+                      onAddEmoji={handleAddAnimatedEmoji}
+                      onRemoveEmoji={handleRemoveAnimatedEmoji}
+                      maxEmojis={20}
+                    />
+
+                    {animatedEmojis.length > 0 && (
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-slate-600 block">Drag emojis on canvas</label>
+                        <AnimatedEmojiCanvas
+                          emojis={animatedEmojis}
+                          onAddEmoji={() => {}}
+                          onRemoveEmoji={handleRemoveAnimatedEmoji}
+                          onUpdatePosition={handleUpdateEmojiPosition}
+                          minHeight={250}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* ── Drawing Section with Advanced Color Picker ── */}
@@ -943,7 +1091,7 @@ export default function FlowerNotesApp() {
 
               {/* Floating hearts animation */}
               <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                {[...Array(8)].map((_, i) => (
+                {[...Array(processingDecorCount)].map((_, i) => (
                   <motion.div
                     key={i}
                     animate={{
@@ -997,53 +1145,17 @@ export default function FlowerNotesApp() {
               </div>
 
               <div className="grid md:grid-cols-5 gap-6 bg-white/60 p-4 md:p-8 rounded-3xl backdrop-blur-xl shadow-xl border border-white/80 items-start">
-                {/* Note preview */}
-                <div className="md:col-span-3 bg-gradient-to-br from-indigo-50 to-pink-50 p-6 md:p-10 rounded-2xl shadow-inner relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#0f766e] via-[#14b8a6] to-[#e11d48]" />
-
-                  <div className="flex justify-between items-start mb-6 gap-6">
-                     <div className="flex-1">
-                       <Bouquet 
-                         flowers={selectedFlowers} 
-                         containerSize="lg"
-                       />
-                     </div>
-                     <motion.span
-                       className="text-5xl opacity-70 flex-shrink-0"
-                       animate={{ scale: [1, 1.2, 1] }}
-                       transition={{ repeat: Infinity, duration: 2 }}
-                     >
-                       {stampEmoji}
-                     </motion.span>
-                   </div>
-
-                  <h3 className="text-2xl font-serif italic text-slate-800 mb-6 border-b border-slate-200/60 pb-4">
-                    Dear {recipient},
-                  </h3>
-                  <p className="text-lg text-slate-700 leading-relaxed font-medium whitespace-pre-wrap break-words min-h-[80px]">
-                    {message}
-                  </p>
-
-                  {hasDrawing && sigCanvas.current && (
-                    <div className="mt-8 border-t border-slate-200/60 pt-6">
-                      <p className="text-xs text-slate-400 uppercase tracking-wider font-bold mb-3">
-                        A little drawing for you
-                      </p>
-                      <img
-                        src={sigCanvas.current.getTrimmedCanvas().toDataURL("image/png")}
-                        alt="Custom drawing"
-                        className="max-h-32 object-contain"
-                      />
-                    </div>
-                  )}
-
-                  <div className="mt-6 flex items-center gap-2 text-xs text-slate-400">
-                    {isPublic ? (
-                      <><Globe size={12} /> Public - visible in gallery</>
-                    ) : (
-                      <><Lock size={12} /> Private - link only</>
-                    )}
-                  </div>
+                {/* Note preview / Letter Interaction */}
+                <div className="md:col-span-3">
+                  <LetterNote
+                    recipient={recipient}
+                    message={message}
+                    flowers={selectedFlowers}
+                    stampEmoji={stampEmoji}
+                    isPublic={isPublic}
+                    drawingUrl={sigCanvas.current?.getTrimmedCanvas()?.toDataURL("image/png")}
+                    animatedEmojis={animatedEmojis}
+                  />
                 </div>
 
                 {/* QR & Sharing */}
@@ -1124,4 +1236,8 @@ export default function FlowerNotesApp() {
     </div>
   );
 }
+
+
+
+
 
