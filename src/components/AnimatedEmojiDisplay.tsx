@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 
 // Available animated emojis with custom animation configs
 export const ANIMATED_EMOJI_OPTIONS = [
@@ -23,14 +23,17 @@ interface AnimatedEmojiDisplayProps {
   emojiId: string;
   size?: number;
   className?: string;
+  animate?: boolean;
 }
 
 export const AnimatedEmojiDisplay: React.FC<AnimatedEmojiDisplayProps> = ({
   emojiId,
   size = 40,
   className = "",
+  animate = true,
 }) => {
   const emoji = ANIMATED_EMOJI_OPTIONS.find((e) => e.id === emojiId);
+  const prefersReduced = useReducedMotion();
 
   if (!emoji) {
     return <span className={`inline-block text-2xl ${className}`}>❓</span>;
@@ -71,6 +74,26 @@ export const AnimatedEmojiDisplay: React.FC<AnimatedEmojiDisplayProps> = ({
         return 1;
     }
   };
+
+  const shouldAnimate = animate && !prefersReduced;
+
+  if (!shouldAnimate) {
+    return (
+      <span
+        className={`inline-block select-none ${className}`}
+        style={{
+          fontSize: size,
+          width: size,
+          height: size,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {emoji.emoji}
+      </span>
+    );
+  }
 
   return (
     <motion.div

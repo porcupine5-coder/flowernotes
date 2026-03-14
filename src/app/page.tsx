@@ -411,9 +411,10 @@ export default function FlowerNotesApp() {
   const isSmallScreen = useMediaQuery("(max-width: 768px)");
   const canHover = useMediaQuery("(hover: hover) and (pointer: fine)");
   const enableHover = canHover && !reduceMotion;
-  const showFloating = !reduceMotion && !isSmallScreen;
-  const floatingDensity = isSmallScreen ? 5 : 10;
-  const processingDecorCount = reduceMotion ? 0 : (isSmallScreen ? 4 : 8);
+  const lowPerf = reduceMotion || isSmallScreen;
+  const showFloating = !lowPerf;
+  const floatingDensity = lowPerf ? 0 : 10;
+  const processingDecorCount = lowPerf ? 0 : 8;
 
   // Mouse parallax for hero
   const mouseX = useMotionValue(0);
@@ -516,6 +517,67 @@ export default function FlowerNotesApp() {
       showToast("Link copied to clipboard!");
     }
   }, [savedQRUrl, showToast]);
+
+  const handleDownloadQR = useCallback(() => {
+    const container = document.getElementById("qr-code-container");
+    const svg = container?.querySelector("svg");
+    if (!svg) {
+      showToast("Error: QR code not found");
+      return;
+    }
+    
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    
+    canvas.width = 512;
+    canvas.height = 512;
+    
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const svgUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgData)}`;
+    
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, 512, 512);
+      
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          showToast("Failed to create image");
+          return;
+        }
+
+        const safeName = recipient.replace(/[^a-z0-9]/gi, "_").substring(0, 20) || "note";
+        const fileName = `flower-note-${safeName}.png`;
+
+        const anyNavigator = navigator as any;
+        if (typeof anyNavigator?.msSaveOrOpenBlob === "function") {
+          anyNavigator.msSaveOrOpenBlob(blob, fileName);
+          showToast("Downloaded as .png file!");
+          return;
+        }
+
+        const url = URL.createObjectURL(blob);
+        const downloadLink = document.createElement("a");
+        downloadLink.href = url;
+        downloadLink.download = fileName;
+        downloadLink.setAttribute("download", fileName);
+        downloadLink.rel = "noopener noreferrer";
+        downloadLink.style.display = "none";
+        
+        document.body.appendChild(downloadLink);
+        downloadLink.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+        document.body.removeChild(downloadLink);
+        
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        showToast("Downloaded as .png file!");
+      }, "image/png");
+    };
+    img.onerror = () => showToast("Error generating image");
+    img.src = svgUrl;
+  }, [recipient, showToast]);
 
   const handleClearDrawing = useCallback(() => {
     sigCanvas.current?.clear();
@@ -922,6 +984,7 @@ export default function FlowerNotesApp() {
                       onAddEmoji={handleAddAnimatedEmoji}
                       onRemoveEmoji={handleRemoveAnimatedEmoji}
                       maxEmojis={20}
+                      reducedMotion={lowPerf}
                     />
 
                     {animatedEmojis.length > 0 && (
@@ -933,6 +996,7 @@ export default function FlowerNotesApp() {
                           onRemoveEmoji={handleRemoveAnimatedEmoji}
                           onUpdatePosition={handleUpdateEmojiPosition}
                           minHeight={250}
+                          reducedMotion={lowPerf}
                         />
                       </div>
                     )}
@@ -1199,23 +1263,46 @@ export default function FlowerNotesApp() {
                       <Share2 size={18} className="text-[#14b8a6]" /> Share your note
                     </h4>
 
-                    <div className="p-4 bg-slate-50 rounded-xl mb-4 shadow-inner">
-                      <QRCode
-                        value={savedQRUrl}
-                        size={150}
-                        fgColor="#0f172a"
-                        bgColor="transparent"
-                        level="Q"
-                      />
+                    <div className="p-5 bg-white rounded-2xl mb-4 shadow-sm border border-slate-100 flex items-center justify-center overflow-hidden w-[200px] h-[200px] mx-auto" id="qr-code-container">
+                      <div className="bg-white p-2 rounded-xl">
+                        <QRCode
+                          value={savedQRUrl}
+                          size={160}
+                          fgColor="#0f172a"
+                          bgColor="#ffffff"
+                          level="L"
+                          style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+                        />
+                      </div>
                     </div>
 
-                    <p className="text-xs text-slate-400 mb-4 max-w-[200px]">
+                    <p className="text-[11px] text-slate-500 mb-5 max-w-[200px] leading-tight font-medium">
                       Scan this QR code with any phone camera to open the note!
                     </p>
 
-                    <button className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-xl font-semibold flex justify-center items-center gap-2 transition-colors">
-                      <Download size={16} /> Save QR Image
-                    </button>
+                    <div className="flex flex-col gap-2.5 w-full">
+                      <button 
+                        onClick={handleDownloadQR}
+                        className="w-full bg-slate-900 hover:bg-black text-white py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 transition-all shadow-lg active:scale-95"
+                      >
+                        <Download size={18} /> Download .png File
+                      </button>
+
+                      {typeof navigator !== 'undefined' && (navigator as any).share && (
+                        <button 
+                          onClick={() => {
+                            (navigator as any).share({
+                              title: 'A FlowerNote for you!',
+                              text: `I created a special FlowerNote for ${recipient}!`,
+                              url: savedQRUrl,
+                            }).catch(() => {});
+                          }}
+                          className="w-full bg-white hover:bg-slate-50 text-[#0f766e] py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 transition-all border-2 border-[#14b8a6]/30 active:scale-95"
+                        >
+                          <Share2 size={18} /> Share Note Link
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="bg-[#0f766e]/5 border border-[#0f766e]/10 p-5 rounded-2xl">
@@ -1270,8 +1357,3 @@ export default function FlowerNotesApp() {
     </div>
   );
 }
-
-
-
-
-

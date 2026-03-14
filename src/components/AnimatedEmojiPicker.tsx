@@ -19,6 +19,7 @@ interface AnimatedEmojiPickerProps {
   onRemoveEmoji: (instanceId: string) => void;
   onUpdatePosition?: (instanceId: string, x: number, y: number) => void;
   maxEmojis?: number;
+  reducedMotion?: boolean;
 }
 
 export const AnimatedEmojiPicker: React.FC<AnimatedEmojiPickerProps> = ({
@@ -27,6 +28,7 @@ export const AnimatedEmojiPicker: React.FC<AnimatedEmojiPickerProps> = ({
   onRemoveEmoji,
   onUpdatePosition,
   maxEmojis = 20,
+  reducedMotion = false,
 }) => {
   const [showPicker, setShowPicker] = useState(false);
   const draggedEmojiRef = useRef<string | null>(null);
@@ -54,9 +56,9 @@ export const AnimatedEmojiPicker: React.FC<AnimatedEmojiPickerProps> = ({
       {/* Selected emojis display area */}
       {selectedEmojis.length > 0 && (
         <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: "auto" }}
-          exit={{ opacity: 0, height: 0 }}
+          initial={reducedMotion ? false : { opacity: 0, height: 0 }}
+          animate={reducedMotion ? undefined : { opacity: 1, height: "auto" }}
+          exit={reducedMotion ? undefined : { opacity: 0, height: 0 }}
           className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border border-slate-100 min-h-24"
         >
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">
@@ -69,16 +71,16 @@ export const AnimatedEmojiPicker: React.FC<AnimatedEmojiPickerProps> = ({
                 return (
                   <motion.div
                     key={selected.instanceId}
-                    layout
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
+                    layout={!reducedMotion}
+                    initial={reducedMotion ? false : { opacity: 0, scale: 0.8 }}
+                    animate={reducedMotion ? undefined : { opacity: 1, scale: 1 }}
+                    exit={reducedMotion ? undefined : { opacity: 0, scale: 0.8 }}
                     className="relative group"
                   >
                     <div className="bg-white rounded-xl p-3 shadow-md border border-slate-100 flex items-center gap-2 hover:shadow-lg transition-shadow cursor-grab active:cursor-grabbing">
                       <GripHorizontal size={14} className="text-slate-300" />
                       <div className="w-8 h-8 flex items-center justify-center">
-                        <AnimatedEmojiDisplay emojiId={selected.id} size={32} />
+                        <AnimatedEmojiDisplay emojiId={selected.id} size={32} animate={!reducedMotion} />
                       </div>
                       <span className="text-xs font-medium text-slate-600 max-w-20 truncate">
                         {emoji?.label}
@@ -120,9 +122,9 @@ export const AnimatedEmojiPicker: React.FC<AnimatedEmojiPickerProps> = ({
         <AnimatePresence>
           {showPicker && canAddMore && (
             <motion.div
-              initial={{ opacity: 0, y: -10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              initial={reducedMotion ? false : { opacity: 0, y: -10, scale: 0.95 }}
+              animate={reducedMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
+              exit={reducedMotion ? undefined : { opacity: 0, y: -10, scale: 0.95 }}
               className="absolute top-full left-0 right-0 z-50 mt-2 bg-white rounded-2xl shadow-xl border border-slate-100 p-4"
             >
               <p className="text-xs font-semibold text-slate-500 mb-3 uppercase tracking-wider">
@@ -145,7 +147,7 @@ export const AnimatedEmojiPicker: React.FC<AnimatedEmojiPickerProps> = ({
                     title={`${emoji.label} (drag or click)`}
                   >
                     <div className="w-8 h-8 flex items-center justify-center">
-                      <AnimatedEmojiDisplay emojiId={emoji.id} size={28} />
+                      <AnimatedEmojiDisplay emojiId={emoji.id} size={28} animate={!reducedMotion} />
                     </div>
                     <span className="text-[10px] font-semibold text-slate-500 group-hover:text-purple-600 text-center truncate max-w-full">
                       {emoji.label}

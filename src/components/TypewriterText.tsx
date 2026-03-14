@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import React, { useEffect, useRef, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 
 interface TypewriterTextProps {
   text: string;
@@ -18,59 +18,58 @@ export const TypewriterText: React.FC<TypewriterTextProps> = ({
   onComplete,
   startDelay = 0.5,
 }) => {
+  const prefersReduced = useReducedMotion();
+  const [visibleCount, setVisibleCount] = useState(0);
   const [isTypingComplete, setIsTypingComplete] = useState(false);
-
-  // Split text into characters, keeping spaces intact
-  const characters = Array.from(text);
+  const completedRef = useRef(false);
+  const timeoutRef = useRef<number | null>(null);
+  const startRef = useRef<number | null>(null);
+  const indexRef = useRef(0);
 
   useEffect(() => {
-    // Calculate total duration roughly to trigger complete callback
-    const totalDuration = startDelay + characters.length * speed;
-    const timeout = setTimeout(() => {
+    completedRef.current = false;
+    indexRef.current = 0;
+    setIsTypingComplete(false);
+    setVisibleCount(0);
+
+    if (prefersReduced) {
+      setVisibleCount(text.length);
       setIsTypingComplete(true);
       if (onComplete) onComplete();
-    }, totalDuration * 1000 + 500); // 500ms buffer after typing ends
+      return;
+    }
 
-    return () => clearTimeout(timeout);
-  }, [characters.length, speed, startDelay, onComplete]);
+    const tick = () => {
+      indexRef.current = Math.min(indexRef.current + 1, text.length);
+      setVisibleCount(indexRef.current);
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: speed,
-        delayChildren: startDelay,
-      },
-    },
-  };
+      if (indexRef.current >= text.length) {
+        if (!completedRef.current) {
+          completedRef.current = true;
+          setIsTypingComplete(true);
+          if (onComplete) onComplete();
+        }
+        return;
+      }
 
-  const characterVariants = {
-    hidden: { opacity: 0 },
-    visible: { opacity: 1 },
-  };
+      timeoutRef.current = window.setTimeout(tick, speed * 1000);
+    };
+
+    startRef.current = window.setTimeout(() => {
+      timeoutRef.current = window.setTimeout(tick, speed * 1000);
+    }, startDelay * 1000);
+
+    return () => {
+      if (startRef.current) window.clearTimeout(startRef.current);
+      if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
+    };
+  }, [text, speed, startDelay, onComplete, prefersReduced]);
 
   return (
     <div className={`relative inline-block ${className}`}>
-      <motion.p
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        aria-label={text}
-        className="whitespace-pre-wrap break-words inline"
-      >
-        {characters.map((char, index) => (
-          <motion.span
-            key={`${char}-${index}`}
-            variants={characterVariants}
-            aria-hidden="true"
-            // Make spaces render properly
-            className={char === " " ? "inline-block w-[0.25em]" : "inline-block"}
-          >
-            {char === " " ? "\u00A0" : char}
-          </motion.span>
-        ))}
-      </motion.p>
+      <span aria-label={text} className="whitespace-pre-wrap break-words inline">
+        {text.slice(0, visibleCount)}
+      </span>
       
       {/* Blinking cursor effect */}
       {!isTypingComplete && (

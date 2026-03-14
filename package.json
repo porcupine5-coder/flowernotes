@@ -12,6 +12,7 @@
     "@remotion/animated-emoji": "^4.0.434",
     "@types/animejs": "^3.1.13",
     "@types/react-signature-canvas": "^1.0.7",
+    "@vercel/analytics": "^2.0.1",
     "animejs": "^4.3.6",
     "clsx": "^2.1.1",
     "framer-motion": "^12.35.2",
